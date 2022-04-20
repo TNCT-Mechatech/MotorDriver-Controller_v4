@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# CubeIDE
+Debug/
+Release/
+.settings/
+.mxproject
+*.launch
+cmake-build-debug/
+.idea/
