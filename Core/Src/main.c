@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <QEI.hpp>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -521,10 +521,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, DIR_2_Pin|LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DIR_3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DIR_3_Pin|DIR_0_Pin|DIR_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|DIR_1_Pin|DIR_2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -532,15 +532,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DIR_2_Pin LD2_Pin */
-  GPIO_InitStruct.Pin = DIR_2_Pin|LD2_Pin;
+  /*Configure GPIO pins : DIR_3_Pin LD2_Pin */
+  GPIO_InitStruct.Pin = DIR_3_Pin|LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DIR_3_Pin DIR_0_Pin DIR_1_Pin */
-  GPIO_InitStruct.Pin = DIR_3_Pin|DIR_0_Pin|DIR_1_Pin;
+  /*Configure GPIO pins : DIR_4_Pin DIR_1_Pin DIR_2_Pin */
+  GPIO_InitStruct.Pin = DIR_4_Pin|DIR_1_Pin|DIR_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
