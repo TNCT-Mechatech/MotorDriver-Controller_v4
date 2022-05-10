@@ -21,7 +21,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <QEI.hpp>
+#include "QEI.hpp"
+#include "PID.hpp"
+#include "MotorDriver.hpp"
+#include "TwoWireMD.hpp"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,8 +41,18 @@
 
 /* USER CODE END PM */
 
+/* USER CODE BEGIN DOCUMENT */
+/**
+ * htim1 -> encoder 1
+ * htim2 -> pwm
+ * htim3 -> encoder 2
+ * htim4 -> encoder 3
+ * htim8 -> encoder 4
+ */
+/* USER CODE END DOCUMENT */
+
 /* Private variables ---------------------------------------------------------*/
- I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -50,6 +63,16 @@ TIM_HandleTypeDef htim8;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+//  MD
+MotorDriver *md[4];
+//  QEI
+QEI *enc[4];
+//  PID
+PID *vel_ctrl[4];
+//  PID variable (target,feedback,output)
+PID::ctrl_variable_t v_vel[4];
+//  PID parameter (gain,pid_mode)
+PID::ctrl_param_t p_vel[4];
 
 /* USER CODE END PV */
 
