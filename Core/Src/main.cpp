@@ -34,30 +34,37 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ENCODER_REVOLUTION 100
+
+#define CTRL_INTERVAL (1.0 / 200)
+#define M1 0U
+#define M2 1U
+#define M3 2U
+#define M4 3U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+/**
+ * @brief tim_countから実時間[ミリ秒]を取得する
+ */
+#define TIM_COUNT_MS (tim_count) //[ms]
+/**
+ * @brief tim_countに値xを入れる
+ * @param[in] x 入力値
+ */
+#define TIM_COUNT_SET(x) (tim_count = x)
 
 /* USER CODE END PM */
 
-/* USER CODE BEGIN DOCUMENT */
-/**
- * htim1 -> encoder 1
- * htim2 -> pwm
- * htim3 -> encoder 2
- * htim4 -> encoder 3
- * htim8 -> encoder 4
- */
-/* USER CODE END DOCUMENT */
-
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
+ I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim8;
 
 UART_HandleTypeDef huart2;
@@ -66,13 +73,22 @@ UART_HandleTypeDef huart2;
 //  MD
 MotorDriver *md[4];
 //  QEI
-QEI *enc[4];
+QEI *encoder[4];
 //  PID
 PID *vel_ctrl[4];
 //  PID variable (target,feedback,output)
 PID::ctrl_variable_t v_vel[4];
 //  PID parameter (gain,pid_mode)
 PID::ctrl_param_t p_vel[4];
+
+//  controller status. true->active false->stop
+volatile bool ctrl_enabled = false;
+
+/**
+ * @brief 時間計測用カウンタ(TIM15)の割り込み数を数える変数
+ *  1カウントつき1ミリ秒が経過する
+ */
+volatile long tim_count = 0; //tim_count [ms]
 
 /* USER CODE END PV */
 
@@ -86,8 +102,10 @@ static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM8_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void Init_Controller(void);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -130,7 +148,10 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM8_Init();
   MX_USART2_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+  //  init controller
+  Init_Controller();
 
   /* USER CODE END 2 */
 
@@ -140,6 +161,29 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
+    if (ctrl_enabled) {
+      double tim = TIM_COUNT_MS;
+
+      if (tim >= CTRL_INTERVAL) {
+        v_vel[M1].feedback = encoder[M1]->get_velocity(tim); /* モータ1の速度制御器に現在の回転速度[rps]を渡す */
+        vel_ctrl[M1]->step(tim); /* モータ1の速度制御器を更新 */
+        v_vel[M2].feedback = encoder[M2]->get_velocity(tim); /* モータ2の速度制御器に現在の回転速度[rps]を渡す */
+        vel_ctrl[M2]->step(tim); /* モータ2の速度制御器を更新 */
+        v_vel[M3].feedback = encoder[M3]->get_velocity(tim); /* モータ1の速度制御器に現在の回転速度[rps]を渡す */
+        vel_ctrl[M3]->step(tim); /* モータ1の速度制御器を更新 */
+        v_vel[M4].feedback = encoder[M4]->get_velocity(tim); /* モータ2の速度制御器に現在の回転速度[rps]を渡す */
+        vel_ctrl[M4]->step(tim); /* モータ2の速度制御器を更新 */
+
+        TIM_COUNT_SET(0); /* 時間計測用タイマ(TIM15)のカウンタをリセット */
+
+        md[M1]->set(v_vel[M1].output); /* モータ1のモータドライバに出力を渡す */
+        md[M2]->set(v_vel[M2].output); /* モータ2のモータドライバに出力を渡す */
+        md[M3]->set(v_vel[M3].output); /* モータ1のモータドライバに出力を渡す */
+        md[M4]->set(v_vel[M4].output); /* モータ2のモータドライバに出力を渡す */
+      } else
+        TIM_COUNT_SET(0); //  reset timer
+
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -446,6 +490,44 @@ static void MX_TIM4_Init(void)
 }
 
 /**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 1000;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 84;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+  HAL_TIM_Base_Start_IT(&htim6);
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
   * @brief TIM8 Initialization Function
   * @param None
   * @retval None
@@ -573,6 +655,82 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+static void Init_Controller(void){
+  //  init MD
+  md[M1] = new TwoWireMD(
+    &htim2,
+    TIM_CHANNEL_1,
+    DIR_1_GPIO_Port,
+    DIR_1_Pin,
+    false
+  );
+  md[M2] = new TwoWireMD(
+    &htim2,
+    TIM_CHANNEL_2,
+    DIR_2_GPIO_Port,
+    DIR_2_Pin,
+    false
+  );
+  md[M3] = new TwoWireMD(
+    &htim2,
+    TIM_CHANNEL_3,
+    DIR_3_GPIO_Port,
+    DIR_3_Pin,
+    false
+  );
+  md[M4] = new TwoWireMD(
+    &htim2,
+    TIM_CHANNEL_4,
+    DIR_4_GPIO_Port,
+    DIR_4_Pin,
+    false
+  );
+
+  //  init QEI
+  encoder[M1] = new QEI(
+    &htim1,
+    1.0 / ENCODER_REVOLUTION / 100
+  );
+  encoder[M2] = new QEI(
+    &htim3,
+    1.0 / ENCODER_REVOLUTION / 27
+  );
+  encoder[M3] = new QEI(
+    &htim4,
+    1.0 / ENCODER_REVOLUTION / 100
+  );
+  encoder[M4] = new QEI(
+    &htim8,
+    1.0 / ENCODER_REVOLUTION / 264
+  );
+
+  //  pid velocity
+  v_vel[M1] = PID::ctrl_variable_t { 0, 0, 0 };
+  v_vel[M2] = PID::ctrl_variable_t { 0, 0, 0 };
+  v_vel[M3] = PID::ctrl_variable_t { 0, 0, 0 };
+  v_vel[M4] = PID::ctrl_variable_t { 0, 0, 0 };
+
+  //  pid parameter
+  p_vel[M1] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2, true };
+  p_vel[M2] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2.5, true };
+  p_vel[M3] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2, true };
+  p_vel[M4] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 1.5, true };
+
+  //  init pid
+  vel_ctrl[M1] = new PID(&v_vel[M1], &p_vel[M1]);
+  vel_ctrl[M2] = new PID(&v_vel[M2], &p_vel[M2]);
+  vel_ctrl[M3] = new PID(&v_vel[M3], &p_vel[M3]);
+  vel_ctrl[M4] = new PID(&v_vel[M4], &p_vel[M4]);
+
+  //  completed initializing
+  ctrl_enabled = true;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim == &htim6) {
+    tim_count++;
+  }
+}
 /* USER CODE END 4 */
 
 /**
