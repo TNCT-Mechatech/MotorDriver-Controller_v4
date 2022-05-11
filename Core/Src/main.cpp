@@ -160,6 +160,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    /* USER CODE BEGIN 3 */
 
     if (ctrl_enabled) {
       double tim = TIM_COUNT_MS;
@@ -184,7 +185,6 @@ int main(void)
         TIM_COUNT_SET(0); //  reset timer
 
     }
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
