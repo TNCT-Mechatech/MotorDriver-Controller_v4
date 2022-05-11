@@ -58,7 +58,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- I2C_HandleTypeDef hi2c1;
+ ADC_HandleTypeDef hadc1;
+
+I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -103,6 +105,7 @@ static void MX_TIM4_Init(void);
 static void MX_TIM8_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM6_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 static void Init_Controller(void);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
@@ -149,6 +152,7 @@ int main(void)
   MX_TIM8_Init();
   MX_USART2_UART_Init();
   MX_TIM6_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   //  init controller
   Init_Controller();
@@ -160,6 +164,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
 
     if (ctrl_enabled) {
@@ -234,6 +239,58 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -629,7 +686,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, DIR_3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|DIR_1_Pin|DIR_2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|GPIO_PIN_4|DIR_2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -644,8 +701,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DIR_4_Pin DIR_1_Pin DIR_2_Pin */
-  GPIO_InitStruct.Pin = DIR_4_Pin|DIR_1_Pin|DIR_2_Pin;
+  /*Configure GPIO pins : DIR_4_Pin PB4 DIR_2_Pin */
+  GPIO_InitStruct.Pin = DIR_4_Pin|GPIO_PIN_4|DIR_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
