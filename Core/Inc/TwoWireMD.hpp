@@ -21,7 +21,8 @@ class TwoWireMD final : public MotorDriver
 public:
     TwoWireMD(TIM_HandleTypeDef *htim_pwm, uint16_t tim_pwm_ch,
               GPIO_TypeDef *dir_port, uint16_t dir_pin,
-              bool inverse_dir=false);
+              bool inverse_dir=false,
+              float max_power = 1.0);
     ~TwoWireMD();
 
     virtual void set(float power);
