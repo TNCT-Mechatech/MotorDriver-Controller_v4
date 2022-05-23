@@ -22,7 +22,8 @@ public:
     TwoWireMD(TIM_HandleTypeDef *htim_pwm, uint16_t tim_pwm_ch,
               GPIO_TypeDef *dir_port, uint16_t dir_pin,
               bool inverse_dir=false,
-              float max_power = 1.0);
+              float max_power = 1.0,
+              float min_power = 0.0);
     ~TwoWireMD();
 
     virtual void set(float power);
@@ -37,6 +38,7 @@ private:
     bool inverse_dir_;
 
     unsigned int limit_;
+    unsigned int min_power_;
 };
 
 #endif /* SRC_TWOWIREMD_HPP_ */

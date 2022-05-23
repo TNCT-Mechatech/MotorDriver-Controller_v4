@@ -19,14 +19,16 @@
 TwoWireMD::TwoWireMD(TIM_HandleTypeDef *htim_pwm, uint16_t tim_pwm_ch,
                      GPIO_TypeDef *dir_port, uint16_t dir_pin,
                      bool inverse_dir,
-                     float max_power)
+                     float max_power,
+                     float min_power)
   : MotorDriver(),
     htim_pwm_(htim_pwm),
     tim_pwm_ch_(tim_pwm_ch),
     dir_port_(dir_port),
     dir_pin_(dir_pin),
     inverse_dir_(inverse_dir),
-    limit_((unsigned int)(htim_pwm->Init.Period * max_power))
+    limit_((unsigned int)(htim_pwm->Init.Period * max_power)),
+    min_power_((unsigned int)(htim_pwm->Init.Period * min_power))
 {
   HAL_TIM_PWM_Start(htim_pwm_, tim_pwm_ch_);
   __HAL_TIM_SET_COMPARE(htim_pwm_, tim_pwm_ch_, 0);
@@ -66,5 +68,7 @@ void TwoWireMD::set(unsigned int pwm, bool dir)
   HAL_GPIO_WritePin(dir_port_, dir_pin_, (GPIO_PinState)(dir^inverse_dir_));
   if(limit_ < pwm)
     pwm = limit_;
+  if(min_power_ > pwm)
+    pwm = 0;
   __HAL_TIM_SET_COMPARE(htim_pwm_, tim_pwm_ch_, pwm);
 }

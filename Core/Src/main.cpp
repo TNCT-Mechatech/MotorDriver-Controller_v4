@@ -21,6 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+
 #include "QEI.hpp"
 #include "PID.hpp"
 #include "MotorDriver.hpp"
@@ -34,9 +36,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ENCODER_REVOLUTION 100
+#define ENCODER_REVOLUTION 2048
 
-#define CTRL_INTERVAL (1.0 / 200)
+#define CTRL_INTERVAL (1.0 / 500)
 #define M1 0U
 #define M2 1U
 #define M3 2U
@@ -46,14 +48,14 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 /**
- * @brief tim_countから実時間[ミリ秒]を取得する
+ * @brief tim_countから実時間[マイクロ秒]を取得する
  */
-#define TIM_COUNT_MS (tim_count) //[ms]
+#define TIM_COUNT_US (TIM6->CNT * 100UL) //[us]
 /**
  * @brief tim_countに値xを入れる
  * @param[in] x 入力値
  */
-#define TIM_COUNT_SET(x) (tim_count = x)
+#define TIM_COUNT_SET(x) (TIM6->CNT = 0)
 
 /* USER CODE END PM */
 
@@ -86,12 +88,6 @@ PID::ctrl_param_t p_vel[4];
 //  controller status. true->active false->stop
 volatile bool ctrl_enabled = false;
 
-/**
- * @brief 時間計測用カウンタ(TIM15)の割り込み数を数える変数
- *  1カウントつき1ミリ秒が経過する
- */
-volatile long tim_count = 0; //tim_count [ms]
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -113,6 +109,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern "C" {
+  int _write(int file, char *ptr, int len)
+  {
+    HAL_UART_Transmit(&huart2,(uint8_t *)ptr,len,10);
+    return len;
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -123,7 +126,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  setbuf(stdout, NULL);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -157,6 +160,7 @@ int main(void)
   //  init controller
   Init_Controller();
 
+  double last_duty=0.0, now_duty=0.0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -167,29 +171,72 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
+    //  DEBUG
+    HAL_ADC_Start(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, 100);
+    HAL_ADC_Stop(&hadc1);
+
+    //  max 4095
+    uint16_t adc = HAL_ADC_GetValue(&hadc1);
+//    double duty = (double)(adc - 2050) / 1950;
+    now_duty = (double)(adc - 2050) / 1950;
+    double duty = last_duty * 0.6 + now_duty * 0.4;
+    last_duty = now_duty;
+
+
+//    duty = 0.85;
+
+    v_vel[M1].target = 3.0 * duty;
+    v_vel[M2].target = 1.4 * duty;
+    v_vel[M3].target = 1.4 * duty;
+    v_vel[M4].target = 1.4 * duty;
+
     if (ctrl_enabled) {
-      double tim = TIM_COUNT_MS;
+      double tim = TIM_COUNT_US / 1E6;
 
       if (tim >= CTRL_INTERVAL) {
-        v_vel[M1].feedback = encoder[M1]->get_velocity(tim); /* モータ1の速度制御器に現在の回転速度[rps]を渡す */
-        vel_ctrl[M1]->step(tim); /* モータ1の速度制御器を更新 */
-        v_vel[M2].feedback = encoder[M2]->get_velocity(tim); /* モータ2の速度制御器に現在の回転速度[rps]を渡す */
-        vel_ctrl[M2]->step(tim); /* モータ2の速度制御器を更新 */
-        v_vel[M3].feedback = encoder[M3]->get_velocity(tim); /* モータ1の速度制御器に現在の回転速度[rps]を渡す */
-        vel_ctrl[M3]->step(tim); /* モータ1の速度制御器を更新 */
-        v_vel[M4].feedback = encoder[M4]->get_velocity(tim); /* モータ2の速度制御器に現在の回転速度[rps]を渡す */
-        vel_ctrl[M4]->step(tim); /* モータ2の速度制御器を更新 */
 
-        TIM_COUNT_SET(0); /* 時間計測用タイマ(TIM15)のカウンタをリセット */
+        v_vel[M1].feedback = encoder[M1]->get_velocity(tim);
+        vel_ctrl[M1]->step(tim);
+        v_vel[M2].feedback = encoder[M2]->get_velocity(tim);
+        vel_ctrl[M2]->step(tim);
+        v_vel[M3].feedback = encoder[M3]->get_velocity(tim);
+        vel_ctrl[M3]->step(tim);
+        v_vel[M4].feedback = encoder[M4]->get_velocity(tim);
+        vel_ctrl[M4]->step(tim);
 
-        md[M1]->set(v_vel[M1].output); /* モータ1のモータドライバに出力を渡す */
-        md[M2]->set(v_vel[M2].output); /* モータ2のモータドライバに出力を渡す */
-        md[M3]->set(v_vel[M3].output); /* モータ1のモータドライバに出力を渡す */
-        md[M4]->set(v_vel[M4].output); /* モータ2のモータドライバに出力を渡す */
-      } else
-        TIM_COUNT_SET(0); //  reset timer
+        TIM_COUNT_SET(0);
 
-    }
+        md[M1]->set(v_vel[M1].output);
+        md[M2]->set(v_vel[M2].output);
+        md[M3]->set(v_vel[M3].output);
+        md[M4]->set(v_vel[M4].output);
+
+        //  debug
+        /*
+        printf(
+          "t:%1.2lf\tf:%1.2lf\n\r",
+
+          v_vel[M4].target,
+          v_vel[M4].feedback
+        );
+        */
+
+        printf(
+          "1T:%1.2lf\t1F:%1.2lf\t2T:%1.2lf\t2F:%1.2lf\t3T:%1.2lf\t3F:%1.2lf\t4T:%1.2lf\t4F:%1.2lf\n\r",
+          v_vel[M1].target,
+          v_vel[M1].feedback,
+          v_vel[M2].target,
+          v_vel[M2].feedback,
+          v_vel[M3].target,
+          v_vel[M3].feedback,
+          v_vel[M4].target,
+          v_vel[M4].feedback
+        );
+
+      }
+    } else
+      TIM_COUNT_SET(0);
   }
   /* USER CODE END 3 */
 }
@@ -564,9 +611,9 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 1000;
+  htim6.Init.Prescaler = 8400;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 84;
+  htim6.Init.Period = 65535;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -579,7 +626,7 @@ static void MX_TIM6_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM6_Init 2 */
-  HAL_TIM_Base_Start_IT(&htim6);
+  HAL_TIM_Base_Start(&htim6);
   /* USER CODE END TIM6_Init 2 */
 
 }
@@ -686,7 +733,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, DIR_3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|GPIO_PIN_4|DIR_2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|DIR_1_Pin|DIR_2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -701,8 +748,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DIR_4_Pin PB4 DIR_2_Pin */
-  GPIO_InitStruct.Pin = DIR_4_Pin|GPIO_PIN_4|DIR_2_Pin;
+  /*Configure GPIO pins : DIR_4_Pin DIR_1_Pin DIR_2_Pin */
+  GPIO_InitStruct.Pin = DIR_4_Pin|DIR_1_Pin|DIR_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -719,46 +766,54 @@ static void Init_Controller(void){
     TIM_CHANNEL_1,
     DIR_1_GPIO_Port,
     DIR_1_Pin,
-    false
+    true,
+    0.95,
+    0.08
   );
   md[M2] = new TwoWireMD(
     &htim2,
     TIM_CHANNEL_2,
     DIR_2_GPIO_Port,
     DIR_2_Pin,
-    false
+    true,
+    0.95,
+    0.085
   );
   md[M3] = new TwoWireMD(
     &htim2,
     TIM_CHANNEL_3,
     DIR_3_GPIO_Port,
     DIR_3_Pin,
-    false
+    false,
+    0.95,
+    0.1
   );
   md[M4] = new TwoWireMD(
     &htim2,
     TIM_CHANNEL_4,
     DIR_4_GPIO_Port,
     DIR_4_Pin,
-    false
+    false,
+    0.95,
+    0.085
   );
 
   //  init QEI
   encoder[M1] = new QEI(
     &htim1,
-    1.0 / ENCODER_REVOLUTION / 100
+    1.0 / ENCODER_REVOLUTION / 4 / 14 //  incorrect
   );
   encoder[M2] = new QEI(
     &htim3,
-    1.0 / ENCODER_REVOLUTION / 27
+    1.0 / ENCODER_REVOLUTION / 4 / 27
   );
   encoder[M3] = new QEI(
     &htim4,
-    1.0 / ENCODER_REVOLUTION / 100
+    1.0 / ENCODER_REVOLUTION / 4 / 27 //  incorrect
   );
   encoder[M4] = new QEI(
     &htim8,
-    1.0 / ENCODER_REVOLUTION / 264
+    1.0 / ENCODER_REVOLUTION / 4 / 27 //  incorrect
   );
 
   //  pid velocity
@@ -768,10 +823,10 @@ static void Init_Controller(void){
   v_vel[M4] = PID::ctrl_variable_t { 0, 0, 0 };
 
   //  pid parameter
-  p_vel[M1] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2, true };
-  p_vel[M2] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2.5, true };
-  p_vel[M3] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 2, true };
-  p_vel[M4] = PID::ctrl_param_t { 0.6, 0.3, 0, 1.0 / 1.5, true };
+  p_vel[M1] = PID::ctrl_param_t { 0.2, 0.5, 0.0, 1.0 / 5.0, false }; // p: 1.2 i: 1.2 d:0.0 f:5.0
+  p_vel[M2] = PID::ctrl_param_t { 1.0, 1.25, 0.0002, 1.0 / 3.0, false }; //  p:1.25 i:2.25 d: 0 f:3.0
+  p_vel[M3] = PID::ctrl_param_t { 0.5, 2.35, 0.00005, 1.0 / 3.0, false };  //  p:1.4 i:2.5 d:0.0001 f:3.0
+  p_vel[M4] = PID::ctrl_param_t { 1.0, 2.25, 0.0002, 1.0 / 3.0, false };  //  p:1.0 i:2.25 d:0.0002 f:3.0
 
   //  init pid
   vel_ctrl[M1] = new PID(&v_vel[M1], &p_vel[M1]);
@@ -784,9 +839,7 @@ static void Init_Controller(void){
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-  if (htim == &htim6) {
-    tim_count++;
-  }
+
 }
 /* USER CODE END 4 */
 
