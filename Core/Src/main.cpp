@@ -60,9 +60,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc1;
 
-I2C_HandleTypeDef hi2c1;
+SPI_HandleTypeDef hspi2;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -93,7 +93,6 @@ volatile bool ctrl_enabled = false;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -102,6 +101,7 @@ static void MX_TIM8_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
 static void Init_Controller(void);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
@@ -147,7 +147,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_I2C1_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -156,6 +155,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM6_Init();
   MX_ADC1_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   //  init controller
   Init_Controller();
@@ -186,16 +186,22 @@ int main(void)
 
 //    duty = 0.85;
 
+    /*
     v_vel[M1].target = 3.0 * duty;
     v_vel[M2].target = 1.4 * duty;
     v_vel[M3].target = 1.4 * duty;
     v_vel[M4].target = 1.4 * duty;
+    */
+
+    //  angle
+    v_vel[M4].target = 1.0 * duty; // rotation
 
     if (ctrl_enabled) {
       double tim = TIM_COUNT_US / 1E6;
 
       if (tim >= CTRL_INTERVAL) {
 
+        /*
         v_vel[M1].feedback = encoder[M1]->get_velocity(tim);
         vel_ctrl[M1]->step(tim);
         v_vel[M2].feedback = encoder[M2]->get_velocity(tim);
@@ -204,24 +210,31 @@ int main(void)
         vel_ctrl[M3]->step(tim);
         v_vel[M4].feedback = encoder[M4]->get_velocity(tim);
         vel_ctrl[M4]->step(tim);
+        */
+
+        v_vel[M4].feedback = encoder[M4]->get_angle();
+        vel_ctrl[M4]->step(tim);
 
         TIM_COUNT_SET(0);
 
-        md[M1]->set(v_vel[M1].output);
+        md[M4]->set(v_vel[M4].output);
+
+        /*
+        md[M1]->set(v_vel[M2].output);
         md[M2]->set(v_vel[M2].output);
         md[M3]->set(v_vel[M3].output);
         md[M4]->set(v_vel[M4].output);
+        */
 
         //  debug
-        /*
         printf(
           "t:%1.2lf\tf:%1.2lf\n\r",
 
           v_vel[M4].target,
           v_vel[M4].feedback
         );
-        */
 
+        /*
         printf(
           "1T:%1.2lf\t1F:%1.2lf\t2T:%1.2lf\t2F:%1.2lf\t3T:%1.2lf\t3F:%1.2lf\t4T:%1.2lf\t4F:%1.2lf\n\r",
           v_vel[M1].target,
@@ -233,6 +246,7 @@ int main(void)
           v_vel[M4].target,
           v_vel[M4].feedback
         );
+        */
 
       }
     } else
@@ -258,13 +272,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 24;
+  RCC_OscInitStruct.PLL.PLLN = 320;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -327,7 +340,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Channel = ADC_CHANNEL_10;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -341,36 +354,40 @@ static void MX_ADC1_Init(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief SPI2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_SPI2_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN SPI2_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END SPI2_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  /* USER CODE BEGIN SPI2_Init 1 */
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE END SPI2_Init 1 */
+  /* SPI2 parameter configuration*/
+  hspi2.Instance = SPI2;
+  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi2.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
+  /* USER CODE BEGIN SPI2_Init 2 */
 
-  /* USER CODE END I2C1_Init 2 */
+  /* USER CODE END SPI2_Init 2 */
 
 }
 
@@ -728,31 +745,54 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, DIR_3_Pin|LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EMERGENCT_STOP_Pin|DEBUG_LED_Pin|COM_LED_Pin|ALIVE_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DIR_4_Pin|DIR_1_Pin|DIR_2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, DIR_1_Pin|DIR_2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, DIR_3_Pin|DIR_4_Pin|SPI_CS_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : DIR_3_Pin LD2_Pin */
-  GPIO_InitStruct.Pin = DIR_3_Pin|LD2_Pin;
+  /*Configure GPIO pins : EMERGENCT_STOP_Pin DEBUG_LED_Pin COM_LED_Pin ALIVE_LED_Pin */
+  GPIO_InitStruct.Pin = EMERGENCT_STOP_Pin|DEBUG_LED_Pin|COM_LED_Pin|ALIVE_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DIR_4_Pin DIR_1_Pin DIR_2_Pin */
-  GPIO_InitStruct.Pin = DIR_4_Pin|DIR_1_Pin|DIR_2_Pin;
+  /*Configure GPIO pins : DIR_1_Pin DIR_2_Pin */
+  GPIO_InitStruct.Pin = DIR_1_Pin|DIR_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DIR_3_Pin DIR_4_Pin SPI_CS_Pin */
+  GPIO_InitStruct.Pin = DIR_3_Pin|DIR_4_Pin|SPI_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DIP_SW_4_Pin DIP_SW_3_Pin DIP_SW_2_Pin */
+  GPIO_InitStruct.Pin = DIP_SW_4_Pin|DIP_SW_3_Pin|DIP_SW_2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DIP_SW_1_Pin */
+  GPIO_InitStruct.Pin = DIP_SW_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(DIP_SW_1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DEBUG_BUTTON_Pin DEBUG_SWITCH_Pin */
+  GPIO_InitStruct.Pin = DEBUG_BUTTON_Pin|DEBUG_SWITCH_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
@@ -801,19 +841,19 @@ static void Init_Controller(void){
   //  init QEI
   encoder[M1] = new QEI(
     &htim1,
-    1.0 / ENCODER_REVOLUTION / 4 / 14 //  incorrect
+    1.0 / ENCODER_REVOLUTION / 2 / 14 //  incorrect
   );
   encoder[M2] = new QEI(
     &htim3,
-    1.0 / ENCODER_REVOLUTION / 4 / 27
+    1.0 / ENCODER_REVOLUTION / 2 / 27
   );
   encoder[M3] = new QEI(
     &htim4,
-    1.0 / ENCODER_REVOLUTION / 4 / 27 //  incorrect
+    1.0 / ENCODER_REVOLUTION / 2 / 27 //  incorrect
   );
   encoder[M4] = new QEI(
     &htim8,
-    1.0 / ENCODER_REVOLUTION / 4 / 27 //  incorrect
+    1.0 / ENCODER_REVOLUTION / 2 / 264 //  incorrect old:27
   );
 
   //  pid velocity
@@ -823,10 +863,17 @@ static void Init_Controller(void){
   v_vel[M4] = PID::ctrl_variable_t { 0, 0, 0 };
 
   //  pid parameter
+  /*
   p_vel[M1] = PID::ctrl_param_t { 0.2, 0.5, 0.0, 1.0 / 5.0, false }; // p: 1.2 i: 1.2 d:0.0 f:5.0
   p_vel[M2] = PID::ctrl_param_t { 1.0, 1.25, 0.0002, 1.0 / 3.0, false }; //  p:1.25 i:2.25 d: 0 f:3.0
   p_vel[M3] = PID::ctrl_param_t { 0.5, 2.35, 0.00005, 1.0 / 3.0, false };  //  p:1.4 i:2.5 d:0.0001 f:3.0
   p_vel[M4] = PID::ctrl_param_t { 1.0, 2.25, 0.0002, 1.0 / 3.0, false };  //  p:1.0 i:2.25 d:0.0002 f:3.0
+  */
+
+  p_vel[M1] = PID::ctrl_param_t { 0.0, 0.0, 0.0, 0.0, false };
+  p_vel[M2] = PID::ctrl_param_t { 0.5, 0.3, 0.0, 0.0, false };
+  p_vel[M3] = PID::ctrl_param_t { 0.0, 0.0, 0.0, 0.0, false };
+  p_vel[M4] = PID::ctrl_param_t { 5.0, 0, 0.0, 0.0, false };
 
   //  init pid
   vel_ctrl[M1] = new PID(&v_vel[M1], &p_vel[M1]);
