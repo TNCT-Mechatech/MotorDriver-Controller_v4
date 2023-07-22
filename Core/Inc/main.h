@@ -75,6 +75,8 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define EMERGENCT_STOP_Pin GPIO_PIN_4
 #define EMERGENCT_STOP_GPIO_Port GPIOA
+#define THERMISTOR_Pin GPIO_PIN_5
+#define THERMISTOR_GPIO_Port GPIOA
 #define ENCODER2_CH1_Pin GPIO_PIN_6
 #define ENCODER2_CH1_GPIO_Port GPIOA
 #define ENCODER2_CH2_Pin GPIO_PIN_7
