@@ -29,10 +29,10 @@ public:
 
 private:
     ADC_HandleTypeDef *hadcx_;
-    uint16_t _raw;
+    uint32_t _raw;
 
-    const double B_INVERSE = 1 / (double) B_CONSTANT;
-    const double BASE_TEMP_INVERSE = 1 / (double) BASE_TEMP;
+    const double B_INVERSE = 1.0 / (double)B_CONSTANT;
+    const double BASE_TEMP_INVERSE = 1.0 / (double)BASE_TEMP;
 
     SimpleMovingAverage<double> _sma;
 };
