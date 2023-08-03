@@ -27,6 +27,16 @@
 #include "PID.hpp"
 #include "MotorDriver.hpp"
 #include "TwoWireMD.hpp"
+#include "ThermalSensor.hpp"
+#include "CurrentSensor.hpp"
+
+//	Serial Bridge
+#include <STM32HardwareSPI.h>
+#include <ACAN2517FD.h>
+#include "CANSerialBridge.hpp"
+
+using namespace acan2517fd;
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,9 +46,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ENCODER_REVOLUTION 2048
 
+//  Control interval 2[ms]
 #define CTRL_INTERVAL (1.0 / 500)
+
 #define M1 0U
 #define M2 1U
 #define M3 2U
@@ -47,20 +58,25 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+
 /**
  * @brief tim_countから実時間[マイクロ秒]を取得する
  */
-#define TIM_COUNT_US (TIM6->CNT * 100UL) //[us]
+#define TIM_COUNT_US (tim_count * 100UL) //[us]
+
 /**
  * @brief tim_countに値xを入れる
  * @param[in] x 入力値
  */
-#define TIM_COUNT_SET(x) (TIM6->CNT = 0)
+#define TIM_COUNT_SET(x) (tim_count = x)
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
+DMA_HandleTypeDef hdma_adc1;
+DMA_HandleTypeDef hdma_adc2;
 
 SPI_HandleTypeDef hspi2;
 
@@ -74,6 +90,21 @@ TIM_HandleTypeDef htim8;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+//	timer count [100us/count]
+volatile long tim_count = 0;
+
+//  controller status. true->active false->stop
+volatile bool ctrl_enabled = false;
+//  timer count of controlled at last time
+volatile long last_ctrl_at = 0;
+
+//	debug mode
+volatile bool is_debug = false;
+
+//	device id
+volatile uint8_t device_id = 0;
+
 //  MD
 MotorDriver *md[4];
 //  QEI
@@ -85,14 +116,27 @@ PID::ctrl_variable_t v_vel[4];
 //  PID parameter (gain,pid_mode)
 PID::ctrl_param_t p_vel[4];
 
-//  controller status. true->active false->stop
-volatile bool ctrl_enabled = false;
+//  thermal
+ThermalSensor *thermal;
+//  current sensor
+CurrentSensor *current_sensor;
+
+
+//	SerialBridge
+uint32_t get_milliseconds() {
+    return (uint32_t) (tim_count / 1E3);
+}
+
+STM32HardwareSPI dev_spi(&hspi2, SPI_CS_GPIO_Port, SPI_CS_Pin);
+ACAN2517FD dev_can(dev_spi, get_milliseconds);
+CANSerialBridge serial(&dev_can);
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -102,19 +146,38 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI2_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 static void Init_Controller(void);
+
+static void Init_Settings(void);
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+
+//  LED
+inline void toggleAcknowledge();
+
+inline void toggleAlive();
+
+inline void toggleDebug();
+
+//  Emergency Stop
+inline void unlockEmergencyStop();
+
+inline void lockEmergencyStop();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 extern "C" {
-  int _write(int file, char *ptr, int len)
-  {
-    HAL_UART_Transmit(&huart2,(uint8_t *)ptr,len,10);
+int _write(int file, char *ptr, int len) {
+    if (is_debug) {
+        HAL_UART_Transmit(&huart2, (uint8_t *) ptr, len, 10);
+    }
     return len;
-  }
+}
 }
 
 /* USER CODE END 0 */
@@ -126,7 +189,7 @@ extern "C" {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  setbuf(stdout, NULL);
+    setbuf(stdout, NULL);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -147,6 +210,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -156,102 +220,86 @@ int main(void)
   MX_TIM6_Init();
   MX_ADC1_Init();
   MX_SPI2_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-  //  init controller
-  Init_Controller();
+    //  Emergency Stop
+    lockEmergencyStop();
 
-  double last_duty=0.0, now_duty=0.0;
+    //  initialize controller
+    Init_Controller();
+    Init_Settings();
+
+
+    //	CAN Setting
+    ACAN2517FDSettings settings(ACAN2517FDSettings::OSC_40MHz, 125UL * 1000UL, DataBitRateFactor::x8);
+
+    settings.mRequestedMode = ACAN2517FDSettings::NormalFD;
+
+    settings.mDriverTransmitFIFOSize = 5;
+    settings.mDriverReceiveFIFOSize = 5;
+
+    settings.mBitRatePrescaler = 1;
+    //  Arbitration Bit Rate
+    settings.mArbitrationPhaseSegment1 = 255;
+    settings.mArbitrationPhaseSegment2 = 64;
+    settings.mArbitrationSJW = 64;
+    //  Data Bit Rate
+    settings.mDataPhaseSegment1 = 31;
+    settings.mDataPhaseSegment2 = 8;
+    settings.mDataSJW = 8;
+
+    //	initialize can controller
+    const uint32_t canInitError = dev_can.begin(settings);
+    if (canInitError == 0) {
+        printf("Initialized CAN FD Controller.\n\r");
+        toggleAcknowledge();
+    } else {
+        printf("Failed to initialize CAN FD Controller. error: 0x%lx\n\r", canInitError);
+        return -1;
+    }
+
+    //  add frame
+
+
+    //  TODO
+    unlockEmergencyStop();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+    while (true) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-    //  DEBUG
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 100);
-    HAL_ADC_Stop(&hadc1);
+        //  poll CAN FD Controller
+        dev_can.poll();
 
-    //  max 4095
-    uint16_t adc = HAL_ADC_GetValue(&hadc1);
-//    double duty = (double)(adc - 2050) / 1950;
-    now_duty = (double)(adc - 2050) / 1950;
-    double duty = last_duty * 0.6 + now_duty * 0.4;
-    last_duty = now_duty;
+        if (ctrl_enabled) {
+            //	replace new timer feature
+            double tim = (TIM_COUNT_US - last_ctrl_at) / 1E6;
 
+            if (tim >= CTRL_INTERVAL) {
+                v_vel[M1].feedback = encoder[M1]->get_velocity(tim);
+                vel_ctrl[M1]->step(tim);
+                v_vel[M2].feedback = encoder[M2]->get_velocity(tim);
+                vel_ctrl[M2]->step(tim);
+                v_vel[M3].feedback = encoder[M3]->get_velocity(tim);
+                vel_ctrl[M3]->step(tim);
+                v_vel[M4].feedback = encoder[M4]->get_velocity(tim);
+                vel_ctrl[M4]->step(tim);
 
-//    duty = 0.85;
+                md[M1]->set(v_vel[M2].output);
+                md[M2]->set(v_vel[M2].output);
+                md[M3]->set(v_vel[M3].output);
+                md[M4]->set(v_vel[M4].output);
 
-    /*
-    v_vel[M1].target = 3.0 * duty;
-    v_vel[M2].target = 1.4 * duty;
-    v_vel[M3].target = 1.4 * duty;
-    v_vel[M4].target = 1.4 * duty;
-    */
-
-    //  angle
-    v_vel[M4].target = 1.0 * duty; // rotation
-
-    if (ctrl_enabled) {
-      double tim = TIM_COUNT_US / 1E6;
-
-      if (tim >= CTRL_INTERVAL) {
-
-        /*
-        v_vel[M1].feedback = encoder[M1]->get_velocity(tim);
-        vel_ctrl[M1]->step(tim);
-        v_vel[M2].feedback = encoder[M2]->get_velocity(tim);
-        vel_ctrl[M2]->step(tim);
-        v_vel[M3].feedback = encoder[M3]->get_velocity(tim);
-        vel_ctrl[M3]->step(tim);
-        v_vel[M4].feedback = encoder[M4]->get_velocity(tim);
-        vel_ctrl[M4]->step(tim);
-        */
-
-        v_vel[M4].feedback = encoder[M4]->get_angle();
-        vel_ctrl[M4]->step(tim);
-
-        TIM_COUNT_SET(0);
-
-        md[M4]->set(v_vel[M4].output);
-
-        /*
-        md[M1]->set(v_vel[M2].output);
-        md[M2]->set(v_vel[M2].output);
-        md[M3]->set(v_vel[M3].output);
-        md[M4]->set(v_vel[M4].output);
-        */
-
-        //  debug
-        printf(
-          "t:%1.2lf\tf:%1.2lf\n\r",
-
-          v_vel[M4].target,
-          v_vel[M4].feedback
-        );
-
-        /*
-        printf(
-          "1T:%1.2lf\t1F:%1.2lf\t2T:%1.2lf\t2F:%1.2lf\t3T:%1.2lf\t3F:%1.2lf\t4T:%1.2lf\t4F:%1.2lf\n\r",
-          v_vel[M1].target,
-          v_vel[M1].feedback,
-          v_vel[M2].target,
-          v_vel[M2].feedback,
-          v_vel[M3].target,
-          v_vel[M3].feedback,
-          v_vel[M4].target,
-          v_vel[M4].feedback
-        );
-        */
-
-      }
-    } else
-      TIM_COUNT_SET(0);
-  }
+                //  update last controlled time
+                last_ctrl_at = TIM_COUNT_US;
+            }
+        }
+    }
   /* USER CODE END 3 */
 }
 
@@ -272,11 +320,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 24;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 16;
   RCC_OscInitStruct.PLL.PLLN = 320;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 2;
@@ -324,15 +373,15 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();
@@ -342,7 +391,34 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_10;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Rank = 2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_12;
+  sConfig.Rank = 3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_13;
+  sConfig.Rank = 4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -350,6 +426,58 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.ScanConvMode = ENABLE;
+  hadc2.Init.ContinuousConvMode = ENABLE;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DMAContinuousRequests = ENABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
 
 }
 
@@ -628,9 +756,9 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 8400;
+  htim6.Init.Prescaler = 800;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 65535;
+  htim6.Init.Period = 10;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -643,7 +771,8 @@ static void MX_TIM6_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM6_Init 2 */
-  HAL_TIM_Base_Start(&htim6);
+//  HAL_TIM_Base_Start(&htim6);
+    HAL_TIM_Base_Start_IT(&htim6);
   /* USER CODE END TIM6_Init 2 */
 
 }
@@ -732,6 +861,17 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -799,95 +939,163 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-static void Init_Controller(void){
-  //  init MD
-  md[M1] = new TwoWireMD(
-    &htim2,
-    TIM_CHANNEL_1,
-    DIR_1_GPIO_Port,
-    DIR_1_Pin,
-    true,
-    0.95,
-    0.08
-  );
-  md[M2] = new TwoWireMD(
-    &htim2,
-    TIM_CHANNEL_2,
-    DIR_2_GPIO_Port,
-    DIR_2_Pin,
-    true,
-    0.95,
-    0.085
-  );
-  md[M3] = new TwoWireMD(
-    &htim2,
-    TIM_CHANNEL_3,
-    DIR_3_GPIO_Port,
-    DIR_3_Pin,
-    false,
-    0.95,
-    0.1
-  );
-  md[M4] = new TwoWireMD(
-    &htim2,
-    TIM_CHANNEL_4,
-    DIR_4_GPIO_Port,
-    DIR_4_Pin,
-    false,
-    0.95,
-    0.085
-  );
+static void Init_Controller(void) {
+    //  init MD
+    md[M1] = new TwoWireMD(
+            &htim2,
+            TIM_CHANNEL_1,
+            DIR_1_GPIO_Port,
+            DIR_1_Pin,
+            true,
+            1.0,
+            0.05
+    );
+    md[M2] = new TwoWireMD(
+            &htim2,
+            TIM_CHANNEL_2,
+            DIR_2_GPIO_Port,
+            DIR_2_Pin,
+            true,
+            1.0,
+            0.05
+    );
+    md[M3] = new TwoWireMD(
+            &htim2,
+            TIM_CHANNEL_3,
+            DIR_3_GPIO_Port,
+            DIR_3_Pin,
+            false,
+            1.0,
+            0.05
+    );
+    md[M4] = new TwoWireMD(
+            &htim2,
+            TIM_CHANNEL_4,
+            DIR_4_GPIO_Port,
+            DIR_4_Pin,
+            false,
+            1.0,
+            0.05
+    );
 
-  //  init QEI
-  encoder[M1] = new QEI(
-    &htim1,
-    1.0 / ENCODER_REVOLUTION / 2 / 14 //  incorrect
-  );
-  encoder[M2] = new QEI(
-    &htim3,
-    1.0 / ENCODER_REVOLUTION / 2 / 27
-  );
-  encoder[M3] = new QEI(
-    &htim4,
-    1.0 / ENCODER_REVOLUTION / 2 / 27 //  incorrect
-  );
-  encoder[M4] = new QEI(
-    &htim8,
-    1.0 / ENCODER_REVOLUTION / 2 / 264 //  incorrect old:27
-  );
+    //  init QEI
+    encoder[M1] = new QEI(
+            &htim1,
+            1.0 / 2048 / 2
+    );
+    encoder[M2] = new QEI(
+            &htim3,
+            1.0 / 2048 / 2
+    );
+    encoder[M3] = new QEI(
+            &htim4,
+            1.0 / 2048 / 2
+    );
+    encoder[M4] = new QEI(
+            &htim8,
+            1.0 / 2048 / 2
+    );
 
-  //  pid velocity
-  v_vel[M1] = PID::ctrl_variable_t { 0, 0, 0 };
-  v_vel[M2] = PID::ctrl_variable_t { 0, 0, 0 };
-  v_vel[M3] = PID::ctrl_variable_t { 0, 0, 0 };
-  v_vel[M4] = PID::ctrl_variable_t { 0, 0, 0 };
+    //  pid velocity
+    v_vel[M1] = PID::ctrl_variable_t{0, 0, 0};
+    v_vel[M2] = PID::ctrl_variable_t{0, 0, 0};
+    v_vel[M3] = PID::ctrl_variable_t{0, 0, 0};
+    v_vel[M4] = PID::ctrl_variable_t{0, 0, 0};
 
-  //  pid parameter
-  /*
-  p_vel[M1] = PID::ctrl_param_t { 0.2, 0.5, 0.0, 1.0 / 5.0, false }; // p: 1.2 i: 1.2 d:0.0 f:5.0
-  p_vel[M2] = PID::ctrl_param_t { 1.0, 1.25, 0.0002, 1.0 / 3.0, false }; //  p:1.25 i:2.25 d: 0 f:3.0
-  p_vel[M3] = PID::ctrl_param_t { 0.5, 2.35, 0.00005, 1.0 / 3.0, false };  //  p:1.4 i:2.5 d:0.0001 f:3.0
-  p_vel[M4] = PID::ctrl_param_t { 1.0, 2.25, 0.0002, 1.0 / 3.0, false };  //  p:1.0 i:2.25 d:0.0002 f:3.0
-  */
+    //  pid parameter
+    p_vel[M1] = PID::ctrl_param_t{0.0, 0.0, 0.0, 0.0, false};
+    p_vel[M2] = PID::ctrl_param_t{0.0, 0.0, 0.0, 0.0, false};
+    p_vel[M3] = PID::ctrl_param_t{0.0, 0.0, 0.0, 0.0, false};
+    p_vel[M4] = PID::ctrl_param_t{0.0, 0.0, 0.0, 0.0, false};
 
-  p_vel[M1] = PID::ctrl_param_t { 0.0, 0.0, 0.0, 0.0, false };
-  p_vel[M2] = PID::ctrl_param_t { 0.5, 0.3, 0.0, 0.0, false };
-  p_vel[M3] = PID::ctrl_param_t { 0.0, 0.0, 0.0, 0.0, false };
-  p_vel[M4] = PID::ctrl_param_t { 5.0, 0, 0.0, 0.0, false };
+    //  init pid
+    vel_ctrl[M1] = new PID(&v_vel[M1], &p_vel[M1]);
+    vel_ctrl[M2] = new PID(&v_vel[M2], &p_vel[M2]);
+    vel_ctrl[M3] = new PID(&v_vel[M3], &p_vel[M3]);
+    vel_ctrl[M4] = new PID(&v_vel[M4], &p_vel[M4]);
 
-  //  init pid
-  vel_ctrl[M1] = new PID(&v_vel[M1], &p_vel[M1]);
-  vel_ctrl[M2] = new PID(&v_vel[M2], &p_vel[M2]);
-  vel_ctrl[M3] = new PID(&v_vel[M3], &p_vel[M3]);
-  vel_ctrl[M4] = new PID(&v_vel[M4], &p_vel[M4]);
+    //  thermal
+    thermal = new ThermalSensor(&hadc2);
 
-  //  completed initializing
-  ctrl_enabled = true;
+    //  current
+    current_sensor = new CurrentSensor(&hadc1, 4);
+
+    //  completed initializing
+    ctrl_enabled = true;
+}
+
+void Init_Settings() {
+    //	check if it is debug mode
+    is_debug = HAL_GPIO_ReadPin(DEBUG_SWITCH_GPIO_Port, DEBUG_SWITCH_Pin);
+
+    //	read Device ID
+    bool dip[4];
+    dip[0] = HAL_GPIO_ReadPin(DIP_SW_1_GPIO_Port, DIP_SW_1_Pin);
+    dip[1] = HAL_GPIO_ReadPin(DIP_SW_2_GPIO_Port, DIP_SW_2_Pin);
+    dip[2] = HAL_GPIO_ReadPin(DIP_SW_3_GPIO_Port, DIP_SW_3_Pin);
+    dip[3] = HAL_GPIO_ReadPin(DIP_SW_4_GPIO_Port, DIP_SW_4_Pin);
+    device_id = dip[3] * 8 + dip[2] * 4 + dip[1] * 2 + dip[0];
+
+    printf("device id: %d\n\r", device_id);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-
+    if (htim == &htim6) {
+        tim_count++;
+    }
 }
+
+inline void toggleAcknowledge() {
+    //  TODO inspect
+    HAL_GPIO_TogglePin(COM_LED_GPIO_Port, COM_LED_Pin);
+
+//    static bool state = false;
+//    state = !state;
+//
+//    if (state) {
+//        HAL_GPIO_WritePin(COM_LED_GPIO_Port, COM_LED_Pin, GPIO_PIN_SET);
+//    } else {
+//        HAL_GPIO_WritePin(COM_LED_GPIO_Port, COM_LED_Pin, GPIO_PIN_RESET);
+//    }
+}
+
+inline void toggleAlive() {
+    //  TODO inspect
+    HAL_GPIO_TogglePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin);
+
+//    static bool state = false;
+//    state = !state;
+//
+//    if (state) {
+//        HAL_GPIO_WritePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin, GPIO_PIN_SET);
+//    } else {
+//        HAL_GPIO_WritePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin, GPIO_PIN_RESET);
+//    }
+}
+
+inline void toggleDebug() {
+    //  TODO inspect
+    HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
+
+//    static bool state = false;
+//    state = !state;
+//
+//    if (state) {
+//        HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
+//    } else {
+//        HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
+//    }
+}
+
+//  Emergency Stop
+inline void unlockEmergencyStop() {
+    HAL_GPIO_WritePin(EMERGENCT_STOP_GPIO_Port, EMERGENCT_STOP_Pin, GPIO_PIN_SET);
+}
+
+inline void lockEmergencyStop() {
+    HAL_GPIO_WritePin(EMERGENCT_STOP_GPIO_Port, EMERGENCT_STOP_Pin, GPIO_PIN_RESET);
+}
+
 /* USER CODE END 4 */
 
 /**
@@ -897,11 +1105,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+    /* User can add his own implementation to report the HAL error return state */
+    __disable_irq();
+    while (1) {
+    }
   /* USER CODE END Error_Handler_Debug */
 }
 
