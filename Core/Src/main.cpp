@@ -313,19 +313,10 @@ int main(void)
             double tim = (TIM_COUNT_US - last_ctrl_at) / 1E6;
 
             if (tim >= CTRL_INTERVAL) {
-                v_vel[M1].feedback = encoder[M1]->get_velocity(tim);
-                vel_ctrl[M1]->step(tim);
-                v_vel[M2].feedback = encoder[M2]->get_velocity(tim);
-                vel_ctrl[M2]->step(tim);
-                v_vel[M3].feedback = encoder[M3]->get_velocity(tim);
-                vel_ctrl[M3]->step(tim);
-                v_vel[M4].feedback = encoder[M4]->get_velocity(tim);
-                vel_ctrl[M4]->step(tim);
-
-                md[M1]->set(v_vel[M2].output);
-                md[M2]->set(v_vel[M2].output);
-                md[M3]->set(v_vel[M3].output);
-                md[M4]->set(v_vel[M4].output);
+                operators[M1]->step(tim);
+                operators[M2]->step(tim);
+                operators[M3]->step(tim);
+                operators[M4]->step(tim);
 
                 //  update last controlled time
                 last_ctrl_at = TIM_COUNT_US;
