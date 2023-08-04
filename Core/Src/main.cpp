@@ -64,6 +64,9 @@ using namespace acan2517fd;
 #define M2 1U
 #define M3 2U
 #define M4 3U
+
+#define CTRL_FAULT_COUNT_LIMIT 20
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -108,6 +111,9 @@ volatile long tim_count = 0;
 volatile bool ctrl_enabled = false;
 //  timer count of controlled at last time
 volatile long last_ctrl_at = 0;
+
+//  fault counter
+volatile int ctrl_fault_count = 0;
 
 //	debug mode
 volatile bool is_debug = false;
@@ -317,6 +323,20 @@ int main(void)
                 operators[M2]->step(tim);
                 operators[M3]->step(tim);
                 operators[M4]->step(tim);
+
+                if (v_vel[M1].target * v_vel[M1].feedback < 0
+                    || v_vel[M2].target * v_vel[M2].feedback < 0
+                    || v_vel[M3].target * v_vel[M3].feedback < 0
+                    || v_vel[M4].target * v_vel[M4].feedback < 0
+                        ) {
+                    ctrl_fault_count++;
+                } else {
+                    ctrl_fault_count = 0;
+                }
+
+                //  too many fault, shut down
+                if (ctrl_fault_count > CTRL_FAULT_COUNT_LIMIT)
+                    Error_Handler();
 
                 //  update last controlled time
                 last_ctrl_at = TIM_COUNT_US;
