@@ -3,10 +3,17 @@
 
 #include "Message.hpp"
 
+enum class OperatorMode : uint8_t
+{
+    NO_OPERATOR,
+    MD_OPERATOR,
+    PID_OPERATOR
+};
+
 typedef struct SettingMessageType
 {
     uint8_t nodeId;
-    uint8_t mode;
+    OperatorMode mode;
     uint32_t scale;
     //  normal pid
     float kp;
