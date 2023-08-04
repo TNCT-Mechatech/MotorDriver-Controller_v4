@@ -10,12 +10,12 @@
 class NoOperator : public Operator
 {
 public:
-    NoOperator();
+    NoOperator() {};
 
-    void step(double dt){};
-    void stop(){};
-    void start(){};
-    void reset(){};
+    void step(double dt) override {};
+    void stop() override {};
+    void start() override {};
+    void reset() override {};
 };
 
 #endif //MOTORDRIVER_CONTROLLER_V4_NOOPERATOR_HPP
