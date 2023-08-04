@@ -1154,41 +1154,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 inline void toggleAcknowledge() {
     HAL_GPIO_TogglePin(COM_LED_GPIO_Port, COM_LED_Pin);
-
-//    static bool state = false;
-//    state = !state;
-//
-//    if (state) {
-//        HAL_GPIO_WritePin(COM_LED_GPIO_Port, COM_LED_Pin, GPIO_PIN_SET);
-//    } else {
-//        HAL_GPIO_WritePin(COM_LED_GPIO_Port, COM_LED_Pin, GPIO_PIN_RESET);
-//    }
 }
 
 inline void toggleAlive() {
     HAL_GPIO_TogglePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin);
-
-//    static bool state = false;
-//    state = !state;
-//
-//    if (state) {
-//        HAL_GPIO_WritePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin, GPIO_PIN_SET);
-//    } else {
-//        HAL_GPIO_WritePin(ALIVE_LED_GPIO_Port, ALIVE_LED_Pin, GPIO_PIN_RESET);
-//    }
 }
 
 inline void toggleDebug() {
     HAL_GPIO_TogglePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin);
-
-//    static bool state = false;
-//    state = !state;
-//
-//    if (state) {
-//        HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_SET);
-//    } else {
-//        HAL_GPIO_WritePin(DEBUG_LED_GPIO_Port, DEBUG_LED_Pin, GPIO_PIN_RESET);
-//    }
 }
 
 //  Emergency Stop
