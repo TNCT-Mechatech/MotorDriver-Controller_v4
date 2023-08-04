@@ -29,6 +29,9 @@
 #include "TwoWireMD.hpp"
 #include "ThermalSensor.hpp"
 #include "CurrentSensor.hpp"
+#include "NoOperator.hpp"
+#include "MDOperator.hpp"
+#include "PIDOperator.hpp"
 
 //	Serial Bridge
 #include <STM32HardwareSPI.h>
@@ -115,6 +118,8 @@ PID *vel_ctrl[4];
 PID::ctrl_variable_t v_vel[4];
 //  PID parameter (gain,pid_mode)
 PID::ctrl_param_t p_vel[4];
+//  Operator
+Operator *operators[4];
 
 //  thermal
 ThermalSensor *thermal;
@@ -1013,6 +1018,15 @@ static void Init_Controller(void) {
     vel_ctrl[M2] = new PID(&v_vel[M2], &p_vel[M2]);
     vel_ctrl[M3] = new PID(&v_vel[M3], &p_vel[M3]);
     vel_ctrl[M4] = new PID(&v_vel[M4], &p_vel[M4]);
+
+    //  current
+    current_sensor = new CurrentSensor(&hadc1, 4);
+
+    //  Operators
+    operators[M1] = new NoOperator();
+    operators[M2] = new NoOperator();
+    operators[M3] = new NoOperator();
+    operators[M4] = new NoOperator();
 
     //  thermal
     thermal = new ThermalSensor(&hadc2);
