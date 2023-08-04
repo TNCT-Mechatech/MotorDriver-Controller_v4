@@ -3,9 +3,16 @@
 
 #include "Message.hpp"
 
+enum class Command : uint8_t
+{
+    NO_OPERATION,
+    RESET,
+    UNLOCK_EMERGENCY,
+};
+
 typedef struct CommandMessageType
 {
-    uint16_t command;
+    Command command;
     uint32_t value;
     //  timestamp longtime mod 256
     uint8_t timestamp;
