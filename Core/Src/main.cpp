@@ -434,6 +434,9 @@ int main(void) {
 
                 //  update last controlled time
                 last_ctrl_at = TIM_COUNT_US;
+
+                //  toggle alive led
+                toggleAlive();
             }
         }
     }
