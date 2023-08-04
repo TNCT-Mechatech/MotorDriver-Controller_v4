@@ -314,6 +314,93 @@ int main(void)
         //  poll CAN FD Controller
         dev_can.poll();
 
+        if (serial.update()) {
+            //  ping message
+            if (ping_msg.was_updated()) {
+                ping_msg.data.v = device_id;
+
+                //  reply
+                serial.write(PING_ID);
+                //  toggle acknowledge
+                toggleAcknowledge();
+            }
+
+            //  command message
+            if (command_msg.was_updated()) {
+                //  there's no feature...
+                //  feature coming soon...?
+
+
+                //  acknowledge
+                acknowledge_msg.data.timestamp = command_msg.data.timestamp;
+                serial.write(ACKNOWLEDGE_ID);
+                //  toggle acknowledge
+                toggleAcknowledge();
+            }
+
+            //  setting message
+            if (setting_msg.was_updated()) {
+                if (setting_msg.data.nodeId < 4) {
+                    uint32_t id = setting_msg.data.nodeId;
+                    //  reset
+                    operators[id]->reset();
+
+                    //  set inverse
+                    md[id]->set_inverse_dir(setting_msg.data.reverse);
+
+                    //  set scale
+                    encoder[id]->set_scale(1.0 / 2.0 / setting_msg.data.scale);
+
+                    //  mode
+                    switch (setting_msg.data.mode) {
+                        case OperatorMode::NO_OPERATOR:
+                            operators[id] = new NoOperator();
+                            break;
+                        case OperatorMode::MD_OPERATOR:
+                            operators[id] = new MDOperator(md[id], encoder[id], &v_vel[id],
+                                                           setting_msg.data.encoderType);
+                            break;
+                        case OperatorMode::PID_OPERATOR:
+                            operators[id] = new PIDOperator(md[id], encoder[id], vel_ctrl[id], &v_vel[id],
+                                                            setting_msg.data.encoderType);
+                            break;
+                    }
+
+                    //  gain
+                    p_vel[setting_msg.data.nodeId].kp = setting_msg.data.kp;
+                    p_vel[setting_msg.data.nodeId].ki = setting_msg.data.ki;
+                    p_vel[setting_msg.data.nodeId].kd = setting_msg.data.kd;
+
+                    //  acknowledge
+                    acknowledge_msg.data.timestamp = setting_msg.data.timestamp;
+                    serial.write(ACKNOWLEDGE_ID);
+                    //  toggle acknowledge
+                    toggleAcknowledge();
+                }
+            }
+
+            //  target message
+            if (target_msg.was_updated()) {
+                for (int i = 0; i < 4; ++i) {
+                    v_vel[i].target = (double) target_msg.data.target[i];
+                }
+
+                //  reply feedback
+                if (ctrl_enabled) {
+                    for (int i = 0; i < 4; i++) {
+                        feedback_msg.data.node[i].angle = (float) encoder[i]->get_angle();
+                        feedback_msg.data.node[i].velocity = (float) encoder[i]->get_velocity();
+                        feedback_msg.data.node[i].current = (float) current_sensor->get_current(i);
+                    }
+
+                    //  write
+                    serial.write(FEEDBACK_ID);
+                }
+                //  toggle acknowledge
+                toggleAcknowledge();
+            }
+        }
+
         if (ctrl_enabled) {
             //	replace new timer feature
             double tim = (TIM_COUNT_US - last_ctrl_at) / 1E6;
