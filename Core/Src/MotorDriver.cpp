@@ -71,3 +71,7 @@ void MotorDriver::set(unsigned int pwm, bool dir)
     pwm = 0;
   __HAL_TIM_SET_COMPARE(htim_pwm_, tim_pwm_ch_, pwm);
 }
+
+void MotorDriver::set_inverse_dir(bool inverse_dir) {
+    inverse_dir_ = inverse_dir;
+}
