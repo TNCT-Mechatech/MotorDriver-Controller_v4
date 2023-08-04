@@ -1071,7 +1071,7 @@ static void MX_GPIO_Init(void)
 
 static void Init_Controller(void) {
     //  init MD
-    md[M1] = new TwoWireMD(
+    md[M1] = new MotorDriver(
             &htim2,
             TIM_CHANNEL_1,
             DIR_1_GPIO_Port,
@@ -1080,7 +1080,7 @@ static void Init_Controller(void) {
             1.0,
             0.05
     );
-    md[M2] = new TwoWireMD(
+    md[M2] = new MotorDriver(
             &htim2,
             TIM_CHANNEL_2,
             DIR_2_GPIO_Port,
@@ -1089,7 +1089,7 @@ static void Init_Controller(void) {
             1.0,
             0.05
     );
-    md[M3] = new TwoWireMD(
+    md[M3] = new MotorDriver(
             &htim2,
             TIM_CHANNEL_3,
             DIR_3_GPIO_Port,
@@ -1098,7 +1098,7 @@ static void Init_Controller(void) {
             1.0,
             0.05
     );
-    md[M4] = new TwoWireMD(
+    md[M4] = new MotorDriver(
             &htim2,
             TIM_CHANNEL_4,
             DIR_4_GPIO_Port,
