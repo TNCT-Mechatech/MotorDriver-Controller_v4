@@ -1161,6 +1161,9 @@ static void Init_Controller(void) {
 
     //  completed initializing
     ctrl_enabled = true;
+
+    //  unlock emergency stop
+    unlockEmergencyStop();
 }
 
 void Init_Settings() {
