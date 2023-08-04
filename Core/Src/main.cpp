@@ -26,7 +26,6 @@
 #include "QEI.hpp"
 #include "PID.hpp"
 #include "MotorDriver.hpp"
-#include "TwoWireMD.hpp"
 #include "ThermalSensor.hpp"
 #include "CurrentSensor.hpp"
 #include "NoOperator.hpp"
