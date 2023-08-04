@@ -14,7 +14,7 @@ typedef struct SettingMessageType
 {
     uint8_t nodeId;
     OperatorMode mode;
-    uint32_t scale;
+    float scale;
     bool reverse;
     //  normal pid
     float kp;
