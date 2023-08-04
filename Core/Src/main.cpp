@@ -36,6 +36,14 @@
 #include <STM32HardwareSPI.h>
 #include <ACAN2517FD.h>
 #include "CANSerialBridge.hpp"
+//  Serial Bridge Message
+#include "MessageID.hpp"
+#include "PingMessage.hpp"
+#include "CommandMessage.hpp"
+#include "AcknowledgeMessage.hpp"
+#include "SettingMessage.hpp"
+#include "TargetMessage.hpp"
+#include "FeedbackMessage.hpp"
 
 using namespace acan2517fd;
 
@@ -134,6 +142,13 @@ uint32_t get_milliseconds() {
 STM32HardwareSPI dev_spi(&hspi2, SPI_CS_GPIO_Port, SPI_CS_Pin);
 ACAN2517FD dev_can(dev_spi, get_milliseconds);
 CANSerialBridge serial(&dev_can);
+
+PingMessage ping_msg;
+CommandMessage command_msg;
+AcknowledgeMessage acknowledge_msg;
+SettingMessage setting_msg;
+TargetMessage target_msg;
+FeedbackMessage feedback_msg;
 
 /* USER CODE END PV */
 
@@ -263,6 +278,19 @@ int main(void)
     }
 
     //  add frame
+    const static uint32_t PING_ID = resolve_id(device_id, MessageID::PING);
+    const static uint32_t COMMAND_ID = resolve_id(device_id, MessageID::COMMAND);
+    const static uint32_t ACKNOWLEDGE_ID = resolve_id(device_id, MessageID::ACKNOWLEDGE);
+    const static uint32_t SETTING_ID = resolve_id(device_id, MessageID::SETTING);
+    const static uint32_t TARGET_ID = resolve_id(device_id, MessageID::TARGET);
+    const static uint32_t FEEDBACK_ID = resolve_id(device_id, MessageID::FEEDBACK);
+
+    serial.add_frame(PING_ID, &ping_msg);
+    serial.add_frame(COMMAND_ID,&command_msg);
+    serial.add_frame(ACKNOWLEDGE_ID, &acknowledge_msg);
+    serial.add_frame(SETTING_ID, &setting_msg);
+    serial.add_frame(TARGET_ID, &target_msg);
+    serial.add_frame(FEEDBACK_ID, &feedback_msg);
 
 
     //  TODO
