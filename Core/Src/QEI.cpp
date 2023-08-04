@@ -44,6 +44,13 @@ void QEI::reset_count()
 }
 
 /**
+ * @brief set scale
+ */
+ void QEI::set_scale(double scale) {
+     scale_ = scale;
+ }
+
+/**
  * @brief 現在の角度を出力する関数
  * @return double 現在の角度(カウント値 * scale) [Rotation]
  */
