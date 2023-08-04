@@ -2,18 +2,19 @@
 // Created by owner on 2023/07/16.
 //
 
-#ifndef MOTORDRIVER_CONTROLLER_V4_VECTOROPERATOR_HPP
-#define MOTORDRIVER_CONTROLLER_V4_VECTOROPERATOR_HPP
+#ifndef MOTORDRIVER_CONTROLLER_V4_PIDOPERATOR_HPP
+#define MOTORDRIVER_CONTROLLER_V4_PIDOPERATOR_HPP
 
 #include "Operator.hpp"
 #include "MotorDriver.hpp"
 #include "QEI.hpp"
 #include "PID.hpp"
+#include "EncoderType.hpp"
 
-class VectorOperator : public Operator
+class PIDOperator : public Operator
 {
 public:
-    VectorOperator(MotorDriver* md, QEI* qei, PID* pid, PID::ctrl_variable_t* cv);
+    PIDOperator(MotorDriver* md, QEI* qei, PID* pid, PID::ctrl_variable_t* cv, EncoderType encoder_type);
 
     virtual void step(double dt) = 0;
     virtual void stop() = 0;
@@ -25,6 +26,7 @@ private:
     QEI* _qei;
     PID* _pid;
     PID::ctrl_variable_t* _cv;
+    EncoderType _encoder_type;
 };
 
-#endif //MOTORDRIVER_CONTROLLER_V4_VECTOROPERATOR_HPP
+#endif //MOTORDRIVER_CONTROLLER_V4_PIDOPERATOR_HPP

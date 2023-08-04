@@ -9,16 +9,11 @@
 #include "MotorDriver.hpp"
 #include "QEI.hpp"
 #include "PID.hpp"
+#include "EncoderType.hpp"
 
 class MDOperator : public Operator
 {
 public:
-    enum EncoderType {
-        VELOCITY,
-        ANGLE,
-        NONE
-    };
-
     MDOperator(MotorDriver* md, QEI* qei, PID::ctrl_variable_t* cv, EncoderType encoder_type);
 
     virtual void step(double dt) = 0;

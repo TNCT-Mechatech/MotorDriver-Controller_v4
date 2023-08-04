@@ -2,17 +2,17 @@
 // Created by testusuke on 2023/08/03.
 //
 
-#include "MDOperator.hpp"
+#include "PIDOperator.hpp"
 
 
-MDOperator::MDOperator(MotorDriver* md, QEI* qei, PID::ctrl_variable_t* cv, EncoderType encoder_type)
-        :   _md(md), _qei(qei), _cv(cv), _encoder_type(encoder_type)
+PIDOperator::PIDOperator(MotorDriver* md, QEI* qei, PID* pid, PID::ctrl_variable_t* cv, EncoderType encoder_type)
+    :   _md(md), _qei(qei), _pid(pid), _cv(cv), _encoder_type(encoder_type)
 {
     //  enable
     _is_enabled = true;
 }
 
-void MDOperator::step(double dt) {
+void PIDOperator::step(double dt) {
     //  check if module is enabled
     if (!_is_enabled) {
         return;
@@ -26,11 +26,13 @@ void MDOperator::step(double dt) {
         _cv->feedback = _qei->get_angle();
     }
 
+    //  step pid control
+    _pid->step(dt);
     //  set output to MD
-    _md->set(_cv->target);
+    _md->set(_cv->output);
 }
 
-void MDOperator::stop() {
+void PIDOperator::stop() {
     //  set zero
     _md->set(0.0);
 
@@ -38,12 +40,13 @@ void MDOperator::stop() {
     _is_enabled = false;
 }
 
-void MDOperator::start() {
+void PIDOperator::start() {
     _is_enabled = true;
 }
 
-void MDOperator::reset() {
+void PIDOperator::reset() {
     //  set zero
     _md->set(0.0);
     _qei->reset_count();
+    _pid->reset();
 }
