@@ -5,9 +5,7 @@
 
 enum class Command : uint8_t
 {
-    NO_OPERATION,
-    RESET,
-    UNLOCK_EMERGENCY,
+    NO_OPERATION
 };
 
 typedef struct CommandMessageType
