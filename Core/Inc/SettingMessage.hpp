@@ -2,6 +2,7 @@
 #define _MDC_SETTING_MESSAGE_
 
 #include "Message.hpp"
+#include "EncoderType.hpp"
 
 enum class OperatorMode : uint8_t
 {
@@ -14,6 +15,7 @@ typedef struct SettingMessageType
 {
     uint8_t nodeId;
     OperatorMode mode;
+    EncoderType encoderType;
     float scale;
     bool reverse;
     //  normal pid
