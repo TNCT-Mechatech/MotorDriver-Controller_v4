@@ -16,10 +16,10 @@ class PIDOperator : public Operator
 public:
     PIDOperator(MotorDriver* md, QEI* qei, PID* pid, PID::ctrl_variable_t* cv, EncoderType encoder_type);
 
-    virtual void step(double dt) = 0;
-    virtual void stop() = 0;
-    virtual void start() = 0;
-    virtual void reset() = 0;
+    void step(double dt) override;
+    void stop() override;
+    void start() override;
+    void reset() override;
 
 private:
     MotorDriver* _md;
