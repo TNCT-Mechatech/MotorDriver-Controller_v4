@@ -16,6 +16,8 @@ typedef struct SettingMessageType
     float cp;
     float ci;
     float cd;
+    //  timestamp longtime mod 256
+    uint8_t timestamp;
 } setting_message_t;
 
 typedef sb::CANMessage<setting_message_t> SettingMessage;
