@@ -20,6 +20,9 @@ public:
     void stop() override;
     void start() override;
     void reset() override;
+    OperatorMode mode() override {
+        return OperatorMode::PID_OPERATOR;
+    };
 
 private:
     MotorDriver* _md;

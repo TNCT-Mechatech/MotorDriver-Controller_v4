@@ -16,6 +16,9 @@ public:
     void stop() override {};
     void start() override {};
     void reset() override {};
+    OperatorMode mode() override {
+        return OperatorMode::NO_OPERATOR;
+    };
 };
 
 #endif //MOTORDRIVER_CONTROLLER_V4_NOOPERATOR_HPP
