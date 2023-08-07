@@ -2,7 +2,6 @@
 // Created by testusuke on 2023/07/20.
 //
 
-#include <stdio.h>
 #include "ThermalSensor.hpp"
 
 ThermalSensor::ThermalSensor(ADC_HandleTypeDef *hadcx)
