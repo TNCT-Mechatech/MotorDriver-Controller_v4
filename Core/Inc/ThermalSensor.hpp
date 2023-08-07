@@ -16,7 +16,7 @@
 #define B_CONSTANT 4101             //  [K]
 #define BASE_TEMP 298.15            //  [K]
 #define BASE_RESISTANCE 47000       //  [Ω]
-#define CIRCUIT_RESISTANCE  10000   //  [Ω]
+#define CIRCUIT_RESISTANCE  100000  //  [Ω]
 #define VOLTAGE_IN  3.3             //  [V]
 
 class ThermalSensor
