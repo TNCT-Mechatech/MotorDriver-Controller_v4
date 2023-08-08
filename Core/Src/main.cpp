@@ -468,10 +468,10 @@ int main(void) {
 //                } else {
 //                    ctrl_fault_count = 0;
 //                }
-
-                //  too many fault, shut down
-                if (ctrl_fault_count > CTRL_FAULT_COUNT_LIMIT)
-                    Error_Handler();
+//
+//                //  too many fault, shut down
+//                if (ctrl_fault_count > CTRL_FAULT_COUNT_LIMIT)
+//                    Error_Handler();
 
                 //  update last controlled time
                 last_ctrl_at = TIM_COUNT_US;
