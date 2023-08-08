@@ -22,6 +22,7 @@ typedef struct SettingMessageType
     float kp;
     float ki;
     float kd;
+    float forward_gain;
     //  current pid
     float cp;
     float ci;

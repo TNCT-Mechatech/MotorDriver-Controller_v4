@@ -378,6 +378,7 @@ int main(void) {
                     p_vel[setting_msg.data.nodeId].kp = setting_msg.data.kp;
                     p_vel[setting_msg.data.nodeId].ki = setting_msg.data.ki;
                     p_vel[setting_msg.data.nodeId].kd = setting_msg.data.kd;
+                    p_vel[setting_msg.data.nodeId].forward_gain = setting_msg.data.forward_gain;
 
                     //  acknowledge
                     acknowledge_msg.data.timestamp = setting_msg.data.timestamp;
