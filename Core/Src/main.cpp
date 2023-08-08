@@ -59,6 +59,12 @@ using namespace acan2517fd;
 
 //  Control interval 2[ms]
 #define CTRL_INTERVAL (1.0 / 500)
+//  SerialBridge interval 20[ms]
+#define SB_INTERVAL (1.0 / 50)
+//  Ping interval 3[hz]
+#define PING_INTERVAL (1.0 / 3)
+//  Timeout 2[s]
+#define TIMEOUT 2.0
 
 #define M1 0U
 #define M2 1U
@@ -111,6 +117,10 @@ volatile long tim_count = 0;
 volatile bool ctrl_enabled = false;
 //  timer count of controlled at last time
 volatile long last_ctrl_at = 0;
+volatile long last_sb_at = 0;
+volatile long last_ping_at = 0;
+volatile long last_received_at = 0;
+
 
 //  fault counter
 volatile int ctrl_fault_count = 0;
@@ -310,6 +320,7 @@ int main(void) {
     serial.add_frame(TARGET_ID, &target_msg);
     serial.add_frame(FEEDBACK_ID, &feedback_msg);
 
+    printf("registered messages.\n\r");
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -322,13 +333,22 @@ int main(void) {
         //  poll CAN FD Controller
         dev_can.poll();
 
-        if (serial.update()) {
+        double ping_tim = (TIM_COUNT_US - last_ping_at) / 1E6;
+        if (ping_tim > PING_INTERVAL) {
+            serial.write(PING_ID);
+            last_ping_at = TIM_COUNT_US;
+        }
+
+        double sb_tim = (TIM_COUNT_US - last_sb_at) / 1E6;
+        if (sb_tim > SB_INTERVAL) {
+            serial.update();
+
             //  ping message
             if (ping_msg.was_updated()) {
                 ping_msg.data.v = device_id;
 
-                //  reply
-                serial.write(PING_ID);
+                //  update timestamp last received at
+                last_received_at = TIM_COUNT_US;
                 //  toggle acknowledge
                 toggleAcknowledge();
             }
@@ -342,6 +362,9 @@ int main(void) {
                 //  acknowledge
                 acknowledge_msg.data.timestamp = command_msg.data.timestamp;
                 serial.write(ACKNOWLEDGE_ID);
+
+                //  update timestamp last received at
+                last_received_at = TIM_COUNT_US;
                 //  toggle acknowledge
                 toggleAcknowledge();
             }
@@ -383,8 +406,13 @@ int main(void) {
                     //  acknowledge
                     acknowledge_msg.data.timestamp = setting_msg.data.timestamp;
                     serial.write(ACKNOWLEDGE_ID);
+
+                    //  update timestamp last received at
+                    last_received_at = TIM_COUNT_US;
                     //  toggle acknowledge
                     toggleAcknowledge();
+
+                    printf("node %lu was updated\n\r", id);
                 }
             }
 
@@ -405,13 +433,25 @@ int main(void) {
                     //  write
                     serial.write(FEEDBACK_ID);
                 }
+
+                //  update timestamp last received at
+                last_received_at = TIM_COUNT_US;
                 //  toggle acknowledge
                 toggleAcknowledge();
             }
+
+            last_sb_at = TIM_COUNT_US;
         }
 
         if (ctrl_enabled) {
             double tim = (TIM_COUNT_US - last_ctrl_at) / 1E6;
+
+            double elapsed_time = (TIM_COUNT_US - last_received_at) / 1E6;
+            if (elapsed_time > TIMEOUT) {
+                for (auto & i : v_vel) {
+                    i.target = 0.0;
+                }
+            }
 
             if (tim >= CTRL_INTERVAL) {
                 operators[M1]->step(tim);
@@ -419,15 +459,15 @@ int main(void) {
                 operators[M3]->step(tim);
                 operators[M4]->step(tim);
 
-                if (v_vel[M1].target * v_vel[M1].feedback < 0
-                    || v_vel[M2].target * v_vel[M2].feedback < 0
-                    || v_vel[M3].target * v_vel[M3].feedback < 0
-                    || v_vel[M4].target * v_vel[M4].feedback < 0
-                        ) {
-                    ctrl_fault_count++;
-                } else {
-                    ctrl_fault_count = 0;
-                }
+//                if ((operators[0]->mode() == OperatorMode::PID_OPERATOR && v_vel[M1].target * v_vel[M1].feedback < 0)
+//                    || (operators[1]->mode() == OperatorMode::PID_OPERATOR && v_vel[M2].target * v_vel[M2].feedback < 0)
+//                    || (operators[2]->mode() == OperatorMode::PID_OPERATOR && v_vel[M3].target * v_vel[M3].feedback < 0)
+//                    || (operators[3]->mode() == OperatorMode::PID_OPERATOR && v_vel[M4].target * v_vel[M4].feedback < 0)
+//                        ) {
+//                    ctrl_fault_count++;
+//                } else {
+//                    ctrl_fault_count = 0;
+//                }
 
                 //  too many fault, shut down
                 if (ctrl_fault_count > CTRL_FAULT_COUNT_LIMIT)
