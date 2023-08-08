@@ -449,14 +449,18 @@ int main(void) {
 
             double elapsed_time = (TIM_COUNT_US - last_received_at) / 1E6;
             if (elapsed_time > TIMEOUT) {
-                for (auto & i : v_vel) {
-                    i.target = 0.0;
+                for (auto & i : md) {
+                    i->set(0.0);
                 }
 
                 //  reset controller
                 reinitCANFDController();
 
                 last_received_at = TIM_COUNT_US;
+                //  for minimal diff time
+                last_ctrl_at = TIM_COUNT_US;
+
+                continue;
             }
 
             if (tim >= CTRL_INTERVAL) {
