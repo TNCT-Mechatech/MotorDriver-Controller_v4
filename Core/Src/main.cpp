@@ -62,9 +62,9 @@ using namespace acan2517fd;
 //  SerialBridge interval 20[ms]
 #define SB_INTERVAL (1.0 / 50)
 //  Ping interval 3[hz]
-#define PING_INTERVAL (1.0 / 3)
-//  Timeout 2[s]
-#define TIMEOUT 2.0
+#define PING_INTERVAL (1.0 / 2)
+//  Timeout 1.0[s]
+#define TIMEOUT 1.0
 
 #define M1 0U
 #define M2 1U
@@ -157,6 +157,7 @@ uint32_t get_milliseconds() {
 
 STM32HardwareSPI dev_spi(&hspi2, SPI_CS_GPIO_Port, SPI_CS_Pin);
 ACAN2517FD dev_can(dev_spi, get_milliseconds);
+ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_40MHz, 125UL * 1000UL, DataBitRateFactor::x8);
 CANSerialBridge serial(&dev_can);
 
 PingMessage ping_msg;
@@ -201,6 +202,8 @@ static void Init_Controller(void);
 static void Init_Settings(void);
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+
+void reinitCANFDController();
 
 //  LED
 inline void toggleAcknowledge();
@@ -278,25 +281,23 @@ int main(void) {
 
 
     //	CAN Setting
-    ACAN2517FDSettings settings(ACAN2517FDSettings::OSC_40MHz, 125UL * 1000UL, DataBitRateFactor::x8);
+    can_settings.mRequestedMode = ACAN2517FDSettings::NormalFD;
 
-    settings.mRequestedMode = ACAN2517FDSettings::NormalFD;
+    can_settings.mDriverTransmitFIFOSize = 5;
+    can_settings.mDriverReceiveFIFOSize = 5;
 
-    settings.mDriverTransmitFIFOSize = 5;
-    settings.mDriverReceiveFIFOSize = 5;
-
-    settings.mBitRatePrescaler = 1;
+    can_settings.mBitRatePrescaler = 1;
     //  Arbitration Bit Rate
-    settings.mArbitrationPhaseSegment1 = 255;
-    settings.mArbitrationPhaseSegment2 = 64;
-    settings.mArbitrationSJW = 64;
+    can_settings.mArbitrationPhaseSegment1 = 255;
+    can_settings.mArbitrationPhaseSegment2 = 64;
+    can_settings.mArbitrationSJW = 64;
     //  Data Bit Rate
-    settings.mDataPhaseSegment1 = 31;
-    settings.mDataPhaseSegment2 = 8;
-    settings.mDataSJW = 8;
+    can_settings.mDataPhaseSegment1 = 31;
+    can_settings.mDataPhaseSegment2 = 8;
+    can_settings.mDataSJW = 8;
 
     //	initialize can controller
-    const uint32_t canInitError = dev_can.begin(settings);
+    const uint32_t canInitError = dev_can.begin(can_settings);
     if (canInitError == 0) {
         printf("Initialized CAN FD Controller.\n\r");
         toggleAcknowledge();
@@ -451,6 +452,11 @@ int main(void) {
                 for (auto & i : v_vel) {
                     i.target = 0.0;
                 }
+
+                //  reset controller
+                reinitCANFDController();
+
+                last_received_at = TIM_COUNT_US;
             }
 
             if (tim >= CTRL_INTERVAL) {
@@ -1192,6 +1198,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         tim_count++;
     }
 }
+
+void reinitCANFDController() {
+    dev_can.end();
+    //  init
+    dev_can.begin(can_settings);
+
+    printf("reinit controller\n\r");
+}
+
 
 inline void toggleAcknowledge() {
     HAL_GPIO_TogglePin(COM_LED_GPIO_Port, COM_LED_Pin);
