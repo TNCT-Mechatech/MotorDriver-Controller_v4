@@ -10,7 +10,7 @@
 /**
  * MDC reserved 10,000-10170(==10200)
  */
-#define MDC_ID_RANGE_START 10000
+#define MDC_ID_RANGE_START 1000
 #define MDC_ID_NODE_RANGE 10
 
 enum class MessageID: uint32_t {
