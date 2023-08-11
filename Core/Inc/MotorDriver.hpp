@@ -1,26 +1,31 @@
-/*
- * MotorDriver.hpp
- *
- *  Created on: Nov 13, 2021
- *      Author: Taiyou Komazawa
- */
+#ifndef _MDC_MOTOR_DRIVER_HPP_
+#define _MDC_MOTOR_DRIVER_HPP_
 
-#ifndef INC_MOTORDRIVER_HPP_
-#define INC_MOTORDRIVER_HPP_
+#include <math.h>
+#include <main.h>
 
-/**
- * @brief モータドライバの仮想クラス
- */
 class MotorDriver
 {
 public:
-    MotorDriver();
-    virtual ~MotorDriver();
-    /**
-     * @brief 出力値を指定する関数(1.0~-1.0)
-     * @retval None
-     */
-    virtual void set(float) = 0;
+    MotorDriver(TIM_HandleTypeDef *htim_pwm, uint16_t tim_pwm_ch,
+              GPIO_TypeDef *dir_port, uint16_t dir_pin,
+              bool inverse_dir=false,
+              float max_power = 1.0,
+              float min_power = 0.0);
+    ~MotorDriver();
+
+    void set(float power);
+    void set(unsigned int pwm, bool dir);
+    void set_inverse_dir(bool inverse_dir);
+private:
+
+    TIM_HandleTypeDef *htim_pwm_;
+    uint16_t tim_pwm_ch_;
+    GPIO_TypeDef *dir_port_;
+    uint16_t dir_pin_;
+    bool inverse_dir_;
+    unsigned int limit_;
+    unsigned int min_power_;
 };
 
-#endif /* INC_MOTORDRIVER_HPP_ */
+#endif /* _MDC_MOTOR_DRIVER_HPP_ */

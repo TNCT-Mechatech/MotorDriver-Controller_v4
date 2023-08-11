@@ -1,0 +1,7 @@
+[submodule "Core/SerialBridge"]
+	path = Core/SerialBridge
+	url = git@github.com:TNCT-Mechatech/SerialBridge.git
+	branch = develop
+[submodule "Core/acan2517FD"]
+	path = Core/acan2517FD
+	url = git@github.com:TNCT-Mechatech/acan2517FD.git
