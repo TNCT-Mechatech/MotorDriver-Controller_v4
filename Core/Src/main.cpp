@@ -404,6 +404,9 @@ int main(void) {
                     p_vel[setting_msg.data.nodeId].kd = setting_msg.data.kd;
                     p_vel[setting_msg.data.nodeId].forward_gain = setting_msg.data.forward_gain;
 
+                    //  reset pid
+                    vel_ctrl[setting_msg.data.nodeId]->reset();
+
                     //  acknowledge
                     acknowledge_msg.data.timestamp = setting_msg.data.timestamp;
                     serial.write(ACKNOWLEDGE_ID);
