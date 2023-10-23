@@ -22,6 +22,7 @@ public:
     ~QEI();
 
     void reset_count();
+    void set_scale(double scale);
 
     double get_angle();
 

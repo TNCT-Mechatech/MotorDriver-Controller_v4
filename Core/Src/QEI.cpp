@@ -44,8 +44,15 @@ void QEI::reset_count()
 }
 
 /**
+ * @brief set scale
+ */
+ void QEI::set_scale(double scale) {
+     scale_ = scale;
+ }
+
+/**
  * @brief 現在の角度を出力する関数
- * @return double 現在の角度(カウント値 * scale)
+ * @return double 現在の角度(カウント値 * scale) [Rotation]
  */
 double QEI::get_angle()
 {
@@ -59,7 +66,7 @@ double QEI::get_angle()
  * @brief 現在の速度を出力する関数(get_angle()の微分)
  *
  * @param[in] dt 測定間隔[sec]
- * @return double 現在の速度(角度の微分値)
+ * @return double 現在の速度(角度の微分値) [RPS]
  */
 double QEI::get_velocity(double dt)
 {
