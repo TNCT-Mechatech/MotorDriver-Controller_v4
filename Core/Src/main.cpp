@@ -314,12 +314,24 @@ int main(void) {
     const static uint32_t TARGET_ID = resolve_id(device_id, MessageID::TARGET);
     const static uint32_t FEEDBACK_ID = resolve_id(device_id, MessageID::FEEDBACK);
 
-    serial.add_frame(PING_ID, &ping_msg);
-    serial.add_frame(COMMAND_ID, &command_msg);
-    serial.add_frame(ACKNOWLEDGE_ID, &acknowledge_msg);
-    serial.add_frame(SETTING_ID, &setting_msg);
-    serial.add_frame(TARGET_ID, &target_msg);
-    serial.add_frame(FEEDBACK_ID, &feedback_msg);
+    if (serial.add_frame(PING_ID, &ping_msg) != 0) {
+        printf("Failed to register PING message.\n\r");
+    }
+    if (serial.add_frame(COMMAND_ID, &command_msg) != 0) {
+        printf("Failed to register COMMAND message.\n\r");
+    }
+    if (serial.add_frame(ACKNOWLEDGE_ID, &acknowledge_msg) != 0) {
+        printf("Failed to register ACKNOWLEDGE message.\n\r");
+    }
+    if (serial.add_frame(SETTING_ID, &setting_msg) != 0) {
+        printf("Failed to register SETTING message.\n\r");
+    }
+    if (serial.add_frame(TARGET_ID, &target_msg) != 0) {
+        printf("Failed to register TARGET message.\n\r");
+    }
+    if (serial.add_frame(FEEDBACK_ID, &feedback_msg) != 0) {
+        printf("Failed to register FEEDBACK message.\n\r");
+    }
 
     printf("registered messages.\n\r");
     /* USER CODE END 2 */
@@ -452,7 +464,7 @@ int main(void) {
 
             double elapsed_time = (TIM_COUNT_US - last_received_at) / 1E6;
             if (elapsed_time > TIMEOUT) {
-                for (auto & i : md) {
+                for (auto &i: md) {
                     i->set(0.0);
                 }
 
