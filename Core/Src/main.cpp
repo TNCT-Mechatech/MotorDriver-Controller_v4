@@ -157,7 +157,7 @@ uint32_t get_milliseconds() {
 
 STM32HardwareSPI dev_spi(&hspi2, SPI_CS_GPIO_Port, SPI_CS_Pin);
 ACAN2517FD dev_can(dev_spi, get_milliseconds);
-ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_40MHz, 125UL * 1000UL, DataBitRateFactor::x8);
+ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_4MHz, 125UL * 1000UL, DataBitRateFactor::x8);
 CANSerialBridge serial(&dev_can);
 
 PingMessage ping_msg;
@@ -273,16 +273,6 @@ int main(void)
 
     can_settings.mDriverTransmitFIFOSize = 5;
     can_settings.mDriverReceiveFIFOSize = 5;
-
-    can_settings.mBitRatePrescaler = 1;
-    //  Arbitration Bit Rate
-    can_settings.mArbitrationPhaseSegment1 = 255;
-    can_settings.mArbitrationPhaseSegment2 = 64;
-    can_settings.mArbitrationSJW = 64;
-    //  Data Bit Rate
-    can_settings.mDataPhaseSegment1 = 31;
-    can_settings.mDataPhaseSegment2 = 8;
-    can_settings.mDataSJW = 8;
 
     //	initialize can controller
     const uint32_t canInitError = dev_can.begin(can_settings);
@@ -520,7 +510,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 320;
+  RCC_OscInitStruct.PLL.PLLN = 256;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -698,7 +688,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -785,7 +775,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 3998;
+  htim2.Init.Period = 3199;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -950,7 +940,7 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 800;
+  htim6.Init.Prescaler = 640;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 10;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
