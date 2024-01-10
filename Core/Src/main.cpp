@@ -157,7 +157,7 @@ uint32_t get_milliseconds() {
 
 STM32HardwareSPI dev_spi(&hspi2, SPI_CS_GPIO_Port, SPI_CS_Pin);
 ACAN2517FD dev_can(dev_spi, get_milliseconds);
-ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_4MHz, 500UL * 1000UL, DataBitRateFactor::x4);
+ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_4MHz, 500UL * 1000UL, DataBitRateFactor::x2);
 CANSerialBridge serial(&dev_can);
 
 PingMessage ping_msg;
