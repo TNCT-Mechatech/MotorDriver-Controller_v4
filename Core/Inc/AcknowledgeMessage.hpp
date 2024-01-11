@@ -5,8 +5,8 @@
 
 typedef struct AcknowledgeMessageType
 {
-    //  timestamp longtime mod 256
-    uint8_t timestamp;
+    //  timestamp longtime mod 65,536
+    uint16_t timestamp;
 } acknowledge_message_t;
 
 typedef sb::CANMessage<acknowledge_message_t> AcknowledgeMessage;

@@ -14,7 +14,6 @@
 #define MDC_ID_NODE_RANGE 10
 
 enum class MessageID: uint32_t {
-    PING,
     COMMAND,
     ACKNOWLEDGE,
     SETTING,

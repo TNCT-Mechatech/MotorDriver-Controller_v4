@@ -38,7 +38,6 @@
 #include "CANSerialBridge.hpp"
 //  Serial Bridge Message
 #include "MessageID.hpp"
-#include "PingMessage.hpp"
 #include "CommandMessage.hpp"
 #include "AcknowledgeMessage.hpp"
 #include "SettingMessage.hpp"
@@ -160,7 +159,6 @@ ACAN2517FD dev_can(dev_spi, get_milliseconds);
 ACAN2517FDSettings can_settings(ACAN2517FDSettings::OSC_4MHz, 500UL * 1000UL, DataBitRateFactor::x2);
 CANSerialBridge serial(&dev_can);
 
-PingMessage ping_msg;
 CommandMessage command_msg;
 AcknowledgeMessage acknowledge_msg;
 SettingMessage setting_msg;
@@ -285,16 +283,12 @@ int main(void)
     }
 
     //  add frame
-    const static uint32_t PING_ID = resolve_id(device_id, MessageID::PING);
     const static uint32_t COMMAND_ID = resolve_id(device_id, MessageID::COMMAND);
     const static uint32_t ACKNOWLEDGE_ID = resolve_id(device_id, MessageID::ACKNOWLEDGE);
     const static uint32_t SETTING_ID = resolve_id(device_id, MessageID::SETTING);
     const static uint32_t TARGET_ID = resolve_id(device_id, MessageID::TARGET);
     const static uint32_t FEEDBACK_ID = resolve_id(device_id, MessageID::FEEDBACK);
 
-    if (serial.add_frame(PING_ID, &ping_msg) != 0) {
-        printf("Failed to register PING message.\n\r");
-    }
     if (serial.add_frame(COMMAND_ID, &command_msg) != 0) {
         printf("Failed to register COMMAND message.\n\r");
     }
@@ -326,7 +320,11 @@ int main(void)
 
         double ping_tim = (TIM_COUNT_US - last_ping_at) / 1E6;
         if (ping_tim > PING_INTERVAL) {
-            serial.write(PING_ID);
+            //  set ping command
+            command_msg.data.command = Command::PING;
+            command_msg.data.timestamp = TIM_COUNT_US / 65536;
+
+            serial.write(COMMAND_ID);
             last_ping_at = TIM_COUNT_US;
         }
 
@@ -334,21 +332,37 @@ int main(void)
         if (sb_tim > SB_INTERVAL) {
             serial.update();
 
-            //  ping message
-            if (ping_msg.was_updated()) {
-                ping_msg.data.v = device_id;
-
-                //  update timestamp last received at
-                last_received_at = TIM_COUNT_US;
-                //  toggle acknowledge
-                toggleAcknowledge();
-            }
-
             //  command message
             if (command_msg.was_updated()) {
-                //  there's no feature...
-                //  feature coming soon...?
-
+                if (command_msg.data.command == Command::RESET) {
+                    for (int i = 0; i < 4; ++i) {
+                        //  reset operator
+                        operators[i]->reset();
+                        operators[i] = new NoOperator();
+                        //  md
+                        md[i]->set(0);
+                        //  encoder
+                        encoder[i]->reset_count();
+                        //  pid
+                        vel_ctrl[i]->reset();
+                    }
+                }
+                else if (command_msg.data.command == Command::ENCODER_1_COUNT_RESET) {
+                    encoder[M1]->reset_count();
+                    vel_ctrl[M1]->reset();
+                }
+                else if (command_msg.data.command == Command::ENCODER_2_COUNT_RESET) {
+                    encoder[M2]->reset_count();
+                    vel_ctrl[M2]->reset();
+                }
+                else if (command_msg.data.command == Command::ENCODER_3_COUNT_RESET) {
+                    encoder[M3]->reset_count();
+                    vel_ctrl[M3]->reset();
+                }
+                else if (command_msg.data.command == Command::ENCODER_4_COUNT_RESET) {
+                    encoder[M4]->reset_count();
+                    vel_ctrl[M4]->reset();
+                }
 
                 //  acknowledge
                 acknowledge_msg.data.timestamp = command_msg.data.timestamp;
@@ -360,10 +374,17 @@ int main(void)
                 toggleAcknowledge();
             }
 
+            if (acknowledge_msg.was_updated()) {
+                //  update timestamp last received at
+                last_received_at = TIM_COUNT_US;
+                //  toggle acknowledge
+                toggleAcknowledge();
+            }
+
             //  setting message
             if (setting_msg.was_updated()) {
-                if (setting_msg.data.nodeId < 4) {
-                    uint32_t id = setting_msg.data.nodeId;
+                if ((uint8_t) setting_msg.data.motorId < 4) {
+                    uint32_t id = (uint8_t) setting_msg.data.motorId;
                     //  reset
                     operators[id]->reset();
 
@@ -389,13 +410,13 @@ int main(void)
                     }
 
                     //  gain
-                    p_vel[setting_msg.data.nodeId].kp = setting_msg.data.kp;
-                    p_vel[setting_msg.data.nodeId].ki = setting_msg.data.ki;
-                    p_vel[setting_msg.data.nodeId].kd = setting_msg.data.kd;
-                    p_vel[setting_msg.data.nodeId].forward_gain = setting_msg.data.forward_gain;
+                    p_vel[id].kp = setting_msg.data.kp;
+                    p_vel[id].ki = setting_msg.data.ki;
+                    p_vel[id].kd = setting_msg.data.kd;
+                    p_vel[id].forward_gain = setting_msg.data.forward_gain;
 
                     //  reset pid
-                    vel_ctrl[setting_msg.data.nodeId]->reset();
+                    vel_ctrl[id]->reset();
 
                     //  acknowledge
                     acknowledge_msg.data.timestamp = setting_msg.data.timestamp;
@@ -421,7 +442,6 @@ int main(void)
                     for (int i = 0; i < 4; i++) {
                         feedback_msg.data.node[i].angle = (float) encoder[i]->get_angle();
                         feedback_msg.data.node[i].velocity = (float) encoder[i]->get_velocity();
-                        feedback_msg.data.node[i].current = (float) current_sensor->get_current(i);
                     }
 
                     //  write
