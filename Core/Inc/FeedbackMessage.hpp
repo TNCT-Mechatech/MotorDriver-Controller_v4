@@ -7,7 +7,6 @@ typedef struct NodeFeedbackMessageType
 {
     float angle;
     float velocity;
-    float current;
 } node_feedback_message_t;
 
 typedef struct FeedbackMessageType
